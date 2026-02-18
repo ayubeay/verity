@@ -1,0 +1,11 @@
+{
+  "name": "verity",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "index": "tsx src/index_argue.ts",
+    "score": "tsx src/score_ais.ts",
+    "publish": "tsx src/publish_to_chain.ts"
+  },
+  "license": "ISC"
+}
