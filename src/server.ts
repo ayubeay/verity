@@ -111,13 +111,14 @@ const routes = {
 async function initX402() {
   try {
     await resourceServer.initialize();
+    x402Gate = paymentMiddleware(routes, resourceServer, undefined, undefined, false);
     console.log("[x402] Resource server initialized ✓");
   } catch (e: any) {
-    console.warn("[x402] Facilitator init failed:", e.message);
+    console.warn("[x402] Facilitator init failed — gating disabled:", e.message);
   }
 }
 
-const x402Gate = paymentMiddleware(routes, resourceServer, undefined, undefined, false);
+let x402Gate: express.RequestHandler | null = null;
 
 function paymentLogger(
   req: express.Request,
@@ -153,7 +154,13 @@ function paymentLogger(
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(x402Gate);
+app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (x402Gate) {
+    x402Gate(req, res, next);
+  } else {
+    res.status(503).json({ ok: false, error: "payment_gateway_unavailable", hint: "x402 facilitator not initialized" });
+  }
+});
 app.use(paymentLogger);
 
 const PORT = Number(process.env.PORT || 3001);
@@ -227,6 +234,12 @@ app.get("/leaderboard", (req, res) => {
     leaderboard: page,
     oracle: "VERITY v0.1.0",
   });
+});
+
+// --- Global error handler (never return HTML 500) ---
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("[uncaught]", err?.message || err);
+  res.status(500).json({ ok: false, error: "internal_error", message: err?.message });
 });
 
 // --- Boot ---
