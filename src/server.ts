@@ -120,6 +120,17 @@ async function initX402() {
 
 let x402Gate: express.RequestHandler | null = null;
 
+const requireX402: express.RequestHandler = (req, res, next) => {
+  if (!x402Gate) {
+    return res.status(503).json({
+      ok: false,
+      error: "payment_gateway_unavailable",
+      hint: "x402 facilitator not initialized"
+    });
+  }
+  return x402Gate(req, res, next);
+};
+
 function paymentLogger(
   req: express.Request,
   res: express.Response,
@@ -154,13 +165,6 @@ function paymentLogger(
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if (x402Gate) {
-    x402Gate(req, res, next);
-  } else {
-    res.status(503).json({ ok: false, error: "payment_gateway_unavailable", hint: "x402 facilitator not initialized" });
-  }
-});
 app.use(paymentLogger);
 
 const PORT = Number(process.env.PORT || 3001);
@@ -181,7 +185,7 @@ app.get("/version", (_req, res) => {
 });
 
 // Gated: single agent
-app.get("/agent/:wallet", (req, res) => {
+app.get("/agent/:wallet", requireX402, (req, res) => {
   const wallet = req.params.wallet.toLowerCase();
   const record = scoreMap.get(wallet);
 
@@ -213,7 +217,7 @@ app.get("/agent/:wallet", (req, res) => {
 });
 
 // Gated: leaderboard
-app.get("/leaderboard", (req, res) => {
+app.get("/leaderboard", requireX402, (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 200);
   const page = leaderboardCache.slice(0, limit).map((r, i) => ({
     rank: i + 1,
