@@ -75,7 +75,7 @@ watchFile(SCORES_PATH, { interval: 30_000 }, () => {
 // --- x402 setup (mirrors SURVIVOR exactly) ---
 const RECEIVER_WALLET = process.env.PAYMENT_WALLET || "";
 const FACILITATOR_URL =
-  process.env.FACILITATOR_URL || "https://facilitator.cdp.coinbase.com";
+  process.env.FACILITATOR_URL || "https://api.cdp.coinbase.com/platform/v2/x402";
 
 if (!RECEIVER_WALLET) throw new Error("PAYMENT_WALLET env var required");
 
@@ -117,7 +117,7 @@ async function initX402() {
   }
 }
 
-const x402Gate = paymentMiddleware(routes, resourceServer, undefined, undefined, true);
+const x402Gate = paymentMiddleware(routes, resourceServer, undefined, undefined, false);
 
 function paymentLogger(
   req: express.Request,
