@@ -4,7 +4,6 @@ import cors from "cors";
 import { readFileSync, watchFile } from "fs";
 import { resolve } from "path";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
-import { facilitator as cdpFacilitatorInit } from "@coinbase/x402";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 
 // --- Types (matching your actual JSONL shape) ---
@@ -79,8 +78,10 @@ const FACILITATOR_URL =
 
 if (!RECEIVER_WALLET) throw new Error("PAYMENT_WALLET env var required");
 
-// facilitator is a pre-built config object from @coinbase/x402
-const facilitator = cdpFacilitatorInit;
+const facilitator = new HTTPFacilitatorClient({
+  url: cdpFacilitatorConfig.url,
+  createAuthHeaders: cdpFacilitatorConfig.createAuthHeaders,
+});
 const resourceServer = new x402ResourceServer(facilitator).register(
   "eip155:8453",
   new ExactEvmScheme()
