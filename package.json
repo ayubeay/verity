@@ -5,7 +5,23 @@
   "scripts": {
     "index": "tsx src/index_argue.ts",
     "score": "tsx src/score_ais.ts",
-    "publish": "tsx src/publish_to_chain.ts"
+    "publish": "tsx src/publish_to_chain.ts",
+    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/server.ts"
   },
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "@x402/core": "^2.4.0",
+    "@x402/evm": "^2.4.0",
+    "@x402/express": "^2.4.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
 }
