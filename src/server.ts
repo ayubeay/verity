@@ -254,7 +254,7 @@ app.post("/admin/upload-scores", express.text({ type: "*/*", limit: "10mb" }), a
   }
   try {
     const { writeFile } = await import("fs/promises");
-    await writeFile(AIS_DATA_PATH, req.body, "utf8");
+    await writeFile(SCORES_PATH, req.body, "utf8");
     loadScores();
     res.json({ ok: true, message: "scores uploaded and reloaded" });
   } catch (e: any) {
