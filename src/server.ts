@@ -248,11 +248,7 @@ app.get("/leaderboard", requireX402, (req, res) => {
 
 
 
-// TEMP: admin upload endpoint
-app.post("/admin/upload-scores", express.text({ type: "*/*", limit: "10mb" }), async (req, res) => {
-  const secret = req.headers["x-admin-secret"];
-  if (secret !== process.env.ADMIN_SECRET) {
-    return res.status(403).json({ ok: false, error: "forbidden" });
+
   }
   try {
     const { writeFile } = await import("fs/promises");
