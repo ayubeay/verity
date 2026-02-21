@@ -5,6 +5,8 @@ import { readFileSync, watchFile } from "fs";
 import { resolve } from "path";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
+import { HTTPFacilitatorClient } from "@x402/core/server";
+import { facilitator as cdpFacilitatorConfig } from "@coinbase/x402";
 
 // --- Types (matching your actual JSONL shape) ---
 type AISRecord = {
