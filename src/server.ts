@@ -79,10 +79,8 @@ const FACILITATOR_URL =
 
 if (!RECEIVER_WALLET) throw new Error("PAYMENT_WALLET env var required");
 
-const facilitator = cdpFacilitatorInit({
-  cdpApiKeyId: process.env.CDP_API_KEY_ID,
-  cdpApiKeySecret: process.env.CDP_API_KEY_SECRET,
-});
+// facilitator is a pre-built config object from @coinbase/x402
+const facilitator = cdpFacilitatorInit;
 const resourceServer = new x402ResourceServer(facilitator).register(
   "eip155:8453",
   new ExactEvmScheme()
