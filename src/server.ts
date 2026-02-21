@@ -247,6 +247,23 @@ app.get("/leaderboard", requireX402, (req, res) => {
 // --- Global error handler (never return HTML 500) ---
 
 
+
+// TEMP: admin upload endpoint
+app.post("/admin/upload-scores", express.text({ type: "*/*", limit: "10mb" }), async (req, res) => {
+  const secret = req.headers["x-admin-secret"];
+  if (secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ ok: false, error: "forbidden" });
+  }
+  try {
+    const { writeFile } = await import("fs/promises");
+    await writeFile(SCORES_PATH, req.body, "utf8");
+    loadScores();
+    res.json({ ok: true, message: "scores uploaded and reloaded" });
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error("[uncaught]", err?.message || err);
   res.status(500).json({ ok: false, error: "internal_error", message: err?.message });
