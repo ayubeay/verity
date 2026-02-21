@@ -117,7 +117,7 @@ async function initX402() {
   }
 }
 
-const x402Gate = paymentMiddleware(routes, resourceServer, undefined, undefined, false);
+const x402Gate = paymentMiddleware(routes, resourceServer, undefined, undefined, true);
 
 function paymentLogger(
   req: express.Request,
