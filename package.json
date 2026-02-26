@@ -7,7 +7,8 @@
     "score": "tsx src/score_ais.ts",
     "publish": "tsx src/publish_to_chain.ts",
     "start": "tsx src/server.ts",
-    "dev": "tsx watch src/server.ts"
+    "dev": "tsx watch src/server.ts",
+    "refresh:railway": "bash scripts/refresh_on_railway.sh"
   },
   "license": "ISC",
   "dependencies": {

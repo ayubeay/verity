@@ -180,7 +180,7 @@ async function main() {
   for (const s of scores) scoresStream.write(JSON.stringify(s)+"\n");
   scoresStream.end();
 
-  const debatesRaw     = await readJsonl<any>("./data/argue_debates.jsonl");
+  const debatesRaw     = await readJsonl<any>(process.env.IN_DEBATES || "./data/argue_debates.jsonl");
   const resolvedDebates = debatesRaw.filter((d:any) => d.isResolved);
 
   const leaderboard = {
