@@ -247,19 +247,6 @@ app.get("/leaderboard", requireX402, (req, res) => {
 // --- Global error handler (never return HTML 500) ---
 
 
-
-
-  }
-  try {
-    const { writeFile } = await import("fs/promises");
-    await writeFile(SCORES_PATH, req.body, "utf8");
-    loadScores();
-    res.json({ ok: true, message: "scores uploaded and reloaded" });
-  } catch (e: any) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
-
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error("[uncaught]", err?.message || err);
   res.status(500).json({ ok: false, error: "internal_error", message: err?.message });
