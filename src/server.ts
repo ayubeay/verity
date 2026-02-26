@@ -252,6 +252,56 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   res.status(500).json({ ok: false, error: "internal_error", message: err?.message });
 });
 
+
+// --- Internal cron refresh ---
+import { spawn } from "child_process";
+import { existsSync, writeFileSync, unlinkSync } from "fs";
+
+const ENABLE_INTERNAL_CRON = process.env.ENABLE_INTERNAL_CRON === "1";
+const REFRESH_INTERVAL_MINUTES = Number(process.env.REFRESH_INTERVAL_MINUTES || "360");
+const LOCK_PATH = "/data/.refresh.lock";
+
+function runCmd(cmd: string, args: string[]): Promise<number> {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, { stdio: "inherit", env: process.env });
+    child.on("close", (code) => resolve(code ?? 1));
+  });
+}
+
+async function refreshLoop() {
+  const jitterMs = Math.floor(Math.random() * 5 * 60 * 1000);
+  console.log(`[cron] enabled. first run in ${(jitterMs / 1000).toFixed(0)}s`);
+  await new Promise((r) => setTimeout(r, jitterMs));
+  while (true) {
+    const startedAt = new Date().toISOString();
+    if (existsSync(LOCK_PATH)) {
+      console.log(`[cron] ${startedAt} lock exists, skipping`);
+    } else {
+      try {
+        writeFileSync(LOCK_PATH, startedAt, { encoding: "utf8" });
+        console.log(`[cron] ${startedAt} refresh start`);
+        const idx = await runCmd("npm", ["run", "index"]);
+        if (idx !== 0) throw new Error(`index failed code=${idx}`);
+        const sc = await runCmd("npm", ["run", "score"]);
+        if (sc !== 0) throw new Error(`score failed code=${sc}`);
+        loadScores();
+        console.log(`[cron] ${new Date().toISOString()} refresh OK`);
+      } catch (e: any) {
+        console.error(`[cron] refresh ERROR:`, e?.message || e);
+      } finally {
+        try { unlinkSync(LOCK_PATH); } catch {}
+      }
+    }
+    await new Promise((r) => setTimeout(r, REFRESH_INTERVAL_MINUTES * 60 * 1000));
+  }
+}
+
+if (ENABLE_INTERNAL_CRON) {
+  refreshLoop().catch((e) => console.error("[cron] fatal:", e));
+} else {
+  console.log("[cron] disabled (set ENABLE_INTERNAL_CRON=1 to enable)");
+}
+
 // --- Boot ---
 initX402().then(() => {
   app.listen(PORT, () => {
