@@ -16,6 +16,9 @@ import { mountHealthRoutes } from "../routes/health.js";
 import { mountTraceRoutes } from "../routes/traces.js";
 // ─────────────────────────────────────────────────────────────────────────────
 
+const DATA_DIR = process.env.DATA_DIR ?? "./data";
+const SCORES_PATH = resolve(process.env.AIS_DATA_PATH || `${DATA_DIR}/ais_scores.jsonl`);
+
 // --- Types (matching your actual JSONL shape) ---
 type AISRecord = {
   wallet: string;
@@ -40,7 +43,6 @@ let scoreMap = new Map<string, AISRecord>();
 let leaderboardCache: AISRecord[] = [];
 let lastLoaded = new Date();
 
-const SCORES_PATH = resolve(process.env.AIS_DATA_PATH || "data/ais_scores.jsonl");
 
 function buildCache(map: Map<string, AISRecord>) {
   return [...map.values()]
@@ -177,7 +179,6 @@ app.use(express.json());
 app.use(paymentLogger);
 
 const PORT = Number(process.env.PORT || 3001);
-const DATA_DIR = process.env.DATA_DIR ?? "./data";
 const ADMIN_KEY = process.env.ADMIN_KEY;
 
 // ── Skill Engine boot (before routes) ────────────────────────────────────────
