@@ -3,10 +3,18 @@ import express from "express";
 import cors from "cors";
 import { readFileSync, watchFile } from "fs";
 import { resolve } from "path";
+import path from "node:path";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { facilitator as cdpFacilitatorConfig } from "@coinbase/x402";
+
+// ── Skill Engine ──────────────────────────────────────────────────────────────
+import { initTraceStore } from "../store/traceStore.js";
+import { startInternalRefreshTimer } from "../jobs/startInternalRefreshTimer.js";
+import { mountHealthRoutes } from "../routes/health.js";
+import { mountTraceRoutes } from "../routes/traces.js";
+// ─────────────────────────────────────────────────────────────────────────────
 
 // --- Types (matching your actual JSONL shape) ---
 type AISRecord = {
@@ -51,7 +59,6 @@ function loadScores() {
       if (!line.trim()) continue;
       try {
         const r: AISRecord = JSON.parse(line);
-        // last occurrence wins (append-only file = latest is last)
         map.set(r.wallet.toLowerCase(), r);
       } catch {}
     }
@@ -64,16 +71,14 @@ function loadScores() {
   }
 }
 
-// Load on startup
 loadScores();
 
-// Reload when file changes (scorer writes new entries)
 watchFile(SCORES_PATH, { interval: 30_000 }, () => {
   console.log("[cache] File changed, reloading scores...");
   loadScores();
 });
 
-// --- x402 setup (mirrors SURVIVOR exactly) ---
+// --- x402 setup ---
 const RECEIVER_WALLET = process.env.PAYMENT_WALLET || "";
 const FACILITATOR_URL =
   process.env.FACILITATOR_URL || "https://api.cdp.coinbase.com/platform/v2/x402";
@@ -172,17 +177,48 @@ app.use(express.json());
 app.use(paymentLogger);
 
 const PORT = Number(process.env.PORT || 3001);
+const DATA_DIR = process.env.DATA_DIR ?? "./data";
+const ADMIN_KEY = process.env.ADMIN_KEY;
 
-// Free
-app.get("/health", (_req, res) => {
-  res.json({
-    ok: true,
-    service: "VERITY Agent Integrity Oracle",
-    agents_indexed: scoreMap.size,
-    last_loaded: lastLoaded.toISOString(),
-    uptime_seconds: Math.floor(process.uptime()),
-  });
+// ── Skill Engine boot (before routes) ────────────────────────────────────────
+const traceStore = initTraceStore(DATA_DIR);
+await traceStore.init();
+console.log(`[boot] TraceStore ready at ${DATA_DIR}/traces`);
+
+startInternalRefreshTimer({
+  everyMs: Number(process.env.REFRESH_INTERVAL_MS ?? 6 * 60 * 60 * 1000),
+  baseDir: process.cwd(),
+  dataDir: DATA_DIR,
+  indexPath: path.join(DATA_DIR, "index.json"),
+  scoresPath: path.join(DATA_DIR, "scores.json"),
+  lastGoodPath: path.join(DATA_DIR, ".last_good.json"),
+  mode: "LOCAL_ONLY",
+  intervalTag: "6h",
+  onRun: (res, trace_id) => {
+    console.log(`[refresh] ok=${res.ok} end=${res.endState} trace=${trace_id}`);
+    // After refresh completes, reload the JSONL score cache too
+    if (res.ok) loadScores();
+  },
 });
+console.log(`[boot] Atomic refresh timer started`);
+
+// Health routes (public — replaces the simple /health below)
+mountHealthRoutes(app, DATA_DIR);
+
+// Trace routes (locked behind ADMIN_KEY)
+if (ADMIN_KEY) {
+  app.use("/traces", (req: any, res: any, next: any) => {
+    if (req.headers["x-admin-key"] !== ADMIN_KEY) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    next();
+  });
+  mountTraceRoutes(app);
+  console.log(`[boot] Trace routes mounted (auth enabled)`);
+} else {
+  console.warn(`[boot] ADMIN_KEY not set — /traces disabled`);
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 app.get("/version", (_req, res) => {
   res.json({ version: "0.1.0", network: "base-mainnet", chain_id: 8453 });
@@ -244,63 +280,11 @@ app.get("/leaderboard", requireX402, (req, res) => {
   });
 });
 
-// --- Global error handler (never return HTML 500) ---
-
-
+// --- Global error handler ---
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error("[uncaught]", err?.message || err);
   res.status(500).json({ ok: false, error: "internal_error", message: err?.message });
 });
-
-
-// --- Internal cron refresh ---
-import { spawn } from "child_process";
-import { existsSync, writeFileSync, unlinkSync } from "fs";
-
-const ENABLE_INTERNAL_CRON = process.env.ENABLE_INTERNAL_CRON === "1";
-const REFRESH_INTERVAL_MINUTES = Number(process.env.REFRESH_INTERVAL_MINUTES || "360");
-const LOCK_PATH = "/data/.refresh.lock";
-
-function runCmd(cmd: string, args: string[]): Promise<number> {
-  return new Promise((resolve) => {
-    const child = spawn(cmd, args, { stdio: "inherit", env: process.env });
-    child.on("close", (code) => resolve(code ?? 1));
-  });
-}
-
-async function refreshLoop() {
-  const jitterMs = Math.floor(Math.random() * 5 * 60 * 1000);
-  console.log(`[cron] enabled. first run in ${(jitterMs / 1000).toFixed(0)}s`);
-  await new Promise((r) => setTimeout(r, jitterMs));
-  while (true) {
-    const startedAt = new Date().toISOString();
-    if (existsSync(LOCK_PATH)) {
-      console.log(`[cron] ${startedAt} lock exists, skipping`);
-    } else {
-      try {
-        writeFileSync(LOCK_PATH, startedAt, { encoding: "utf8" });
-        console.log(`[cron] ${startedAt} refresh start`);
-        const idx = await runCmd("npm", ["run", "index"]);
-        if (idx !== 0) throw new Error(`index failed code=${idx}`);
-        const sc = await runCmd("npm", ["run", "score"]);
-        if (sc !== 0) throw new Error(`score failed code=${sc}`);
-        loadScores();
-        console.log(`[cron] ${new Date().toISOString()} refresh OK`);
-      } catch (e: any) {
-        console.error(`[cron] refresh ERROR:`, e?.message || e);
-      } finally {
-        try { unlinkSync(LOCK_PATH); } catch {}
-      }
-    }
-    await new Promise((r) => setTimeout(r, REFRESH_INTERVAL_MINUTES * 60 * 1000));
-  }
-}
-
-if (ENABLE_INTERNAL_CRON) {
-  refreshLoop().catch((e) => console.error("[cron] fatal:", e));
-} else {
-  console.log("[cron] disabled (set ENABLE_INTERNAL_CRON=1 to enable)");
-}
 
 // --- Boot ---
 initX402().then(() => {
