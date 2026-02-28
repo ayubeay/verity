@@ -31,7 +31,7 @@ async function readJsonl<T>(filepath: string): Promise<T[]> {
   if (!fs.existsSync(filepath)) return [];
   const rl = readline.createInterface({ input: fs.createReadStream(filepath), crlfDelay: Infinity });
   const rows: T[] = [];
-  for await (const line of rl) { if (line.trim()) rows.push(JSON.parse(line) as T); }
+  for await (const line of rl) { if (line.trim()) { try { rows.push(JSON.parse(line) as T); } catch {} } }
   return rows;
 }
 
