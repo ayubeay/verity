@@ -100,7 +100,7 @@ async function main() {
 
     if (resolved === 0) {
       scores.push({
-        wallet: p.wallet, ais: 50, tier: 1, flags: FLAG_LOW_SAMPLE,
+        wallet: p.wallet, ais: 50, tier: 2, flags: FLAG_LOW_SAMPLE,
         winRate: 0, resolvedDebates: 0, confidence: 0,
         participatedDebates, argumentsCount: p.argumentsCount,
         totalStaked: p.totalAmountStaked.toString(),
@@ -112,7 +112,7 @@ async function main() {
       continue;
     }
 
-    const confidence = clamp(resolved / 5, 0.2, 1.0);
+    const confidence = clamp(1 - Math.exp(-resolved / 20), 0.1, 1.0);
     const winRate    = p.wins / resolved;
 
     // contractConsistency only reliable with 3+ resolved
@@ -158,8 +158,30 @@ async function main() {
       if (avgLoss > avgWin * 2) { flags |= FLAG_NARROW_WIN_FARMING; flagReasons.push("NARROW_WIN_FARMING"); }
     }
 
+    // Hard restriction override
+    const hardRestricted =
+      (flags & FLAG_NARROW_WIN_FARMING) !== 0 ||
+      ((flags & FLAG_CONCENTRATION_RISK) !== 0 && concentrationRisk > 0.85) ||
+      ((flags & FLAG_STAKE_VOLATILITY) !== 0 && stakeVolatility > 0.8);
+    const finalTier = hardRestricted ? 3 : tier;
+    if ((flags & FLAG_NARROW_WIN_FARMING) !== 0 && finalTier === 3) {
+      const idx = flagReasons.indexOf("NARROW_WIN_FARMING");
+      if (idx !== -1) flagReasons.splice(idx, 1);
+      flagReasons.unshift("HARD:NARROW_WIN_FARMING");
+    }
+    if ((flags & FLAG_CONCENTRATION_RISK) !== 0 && concentrationRisk > 0.85 && finalTier === 3) {
+      const idx = flagReasons.indexOf("CONCENTRATION_RISK");
+      if (idx !== -1) flagReasons.splice(idx, 1);
+      flagReasons.unshift("HARD:CONCENTRATION_RISK");
+    }
+    if ((flags & FLAG_STAKE_VOLATILITY) !== 0 && stakeVolatility > 0.8 && finalTier === 3) {
+      const idx = flagReasons.indexOf("STAKE_VOLATILITY");
+      if (idx !== -1) flagReasons.splice(idx, 1);
+      flagReasons.unshift("HARD:STAKE_VOLATILITY");
+    }
+
     scores.push({
-      wallet: p.wallet, ais, tier, flags,
+      wallet: p.wallet, ais, tier: finalTier, flags,
       winRate, resolvedDebates: resolved, confidence,
       participatedDebates, argumentsCount: p.argumentsCount,
       totalStaked: p.totalAmountStaked.toString(),
@@ -227,7 +249,7 @@ async function main() {
   console.log("\n🏆 Agent leaderboard:");
   scores.slice(0,17).forEach((s,i)=>{
     const conf = s.confidence > 0 ? ` conf=${Math.round(s.confidence*100)}%` : "";
-    console.log(`   ${String(i+1).padStart(2)}. ${s.wallet.slice(0,10)}…  AIS=${s.ais}${conf}  debates=${s.participatedDebates}  resolved=${s.resolvedDebates}  args=${s.argumentsCount}  staked=${formatStake(BigInt(s.totalStaked))}  flags=${s.flagReasons[0]||"none"}`);
+    console.log(`   ${String(i+1).padStart(2)}. ${s.wallet.slice(0,10)}…  AIS=${s.ais}${conf}  debates=${s.participatedDebates}  resolved=${s.resolvedDebates}  args=${s.argumentsCount}  staked=${formatStake(BigInt(s.totalStaked))}  flags=${(s.flagReasons&&s.flagReasons.length)?s.flagReasons.slice(0,3).join(","):"none"}`);
   });
 
   console.log(`\n✅ Scores     → ${OUT_SCORES}`);
