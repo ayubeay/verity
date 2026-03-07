@@ -196,7 +196,7 @@ startInternalRefreshTimer({
   mode: "LOCAL_ONLY",
   intervalTag: "6h",
   onRun: (res, trace_id) => {
-    console.log(`[refresh] ok=${res.ok} end=${res.endState} trace=${trace_id}`);
+    console.log(`[refresh] ok=${res.ok} end=${res.endState} trace=${trace_id} | ${res.ctx.note ?? ""}`);
     // After refresh completes, reload the JSONL score cache too
     if (res.ok) loadScores();
   },
